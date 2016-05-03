@@ -24,12 +24,15 @@ class QueryBuilder
     public function __construct($conn, $table, $resultClass = null){
         $this->conn = $conn;
         $this->query = "select * from $table";
+        $this->resultClass = empty($resultClass) ? 'stdClass' : $resultClass;
     }
 
     public function all()
     {
-        return $this->conn->query($this->query)->fetchAll();
+        return $this->conn->query($this->query)->fetchAll(PDO::FETCH_CLASS, $this->resultClass);
     }
+
+
 }
 
 /* ===================== DEMO ===================== */
