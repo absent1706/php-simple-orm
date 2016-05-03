@@ -72,6 +72,13 @@ abstract class DbModel
         return $this;
     }
 
+    public function delete()
+    {
+        $sql = sprintf("DELETE FROM `%s` WHERE `%s` = ?", self::table(), self::idColumn());
+        self::$conn->prepare($sql)->execute([$this->id()]);
+        $this->{self::idColumn()} = null;
+    }
+
     // TODO: custom setters/getters
     public function fill(array $attributes)
     {
@@ -226,3 +233,7 @@ $p3->update(['title' => 'title 5 - updated']);
 $p4 = new Post(['title' => 'title 6', 'body' => 'body 6']);
 $p4->save();
 echo "Inserted post with id ".$p4->id()."\n";
+
+$p3_d = Post::query()->where('id = ?', [3])->first();
+$p3_d->delete();
+echo "Deleted post with id 3\n";
