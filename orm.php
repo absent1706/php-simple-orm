@@ -21,7 +21,8 @@ abstract class DbModel
 
 class QueryBuilder
 {
-    public function __construct($conn, $table, $resultClass = null){
+    public function __construct($conn, $table, $resultClass = null)
+    {
         $this->conn = $conn;
         $this->query = "select * from $table";
         $this->resultClass = empty($resultClass) ? 'stdClass' : $resultClass;
@@ -32,7 +33,16 @@ class QueryBuilder
         return $this->conn->query($this->query)->fetchAll(PDO::FETCH_CLASS, $this->resultClass);
     }
 
+    public function first()
+    {
+        $this->limit(1);
+        return $this->all()[0];
+    }
 
+    public function limit($limit)
+    {
+        $this->query .= " limit 1";
+    }
 }
 
 /* ===================== DEMO ===================== */
@@ -58,3 +68,4 @@ $conn->exec("
 
 DbModel::setConnection($conn);
 var_dump(Post::query()->all());
+var_dump(Post::query()->first());
