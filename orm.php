@@ -11,6 +11,11 @@ abstract class DbModel
         self::$conn = $conn;
     }
 
+    public function __construct(array $attributes = [])
+    {
+        $this->fill($attributes);
+    }
+
     public static function query($value='')
     {
         return new QueryBuilder(self::$conn, self::table(), static::class);
@@ -53,7 +58,7 @@ abstract class DbModel
         return $result;
     }
 
-    public static function create($attributes)
+    public static function create(array $attributes)
     {
         $currentClass = get_called_class();
         $new_object = new $currentClass;
@@ -61,14 +66,14 @@ abstract class DbModel
         return $new_object;
     }
 
-    public function update($attributes)
+    public function update(array $attributes)
     {
         $this->fill($attributes)->save();
         return $this;
     }
 
     // TODO: custom setters/getters
-    public function fill($attributes)
+    public function fill(array $attributes)
     {
         foreach ($attributes as $attribute => $value) {
             $this->$attribute = $value;
@@ -217,3 +222,7 @@ echo "Updated post ".$p2->id();
 
 $p3 = Post::create(['title' => 'title 5', 'body' => 'body 5']);
 $p3->update(['title' => 'title 5 - updated']);
+
+$p4 = new Post(['title' => 'title 6', 'body' => 'body 6']);
+$p4->save();
+echo "Inserted post with id ".$p4->id()."\n";
