@@ -13,24 +13,30 @@ abstract class DbModel
 
     public static function query($value='')
     {
-        return new QueryBuilder(self::$conn, self::getTableName(), static::class);
+        return new QueryBuilder(self::$conn, self::table(), static::class);
     }
 
-    public static function getTableName()
+    public static function table()
     {
         $currentClass = get_called_class();
         return $currentClass::$table;
     }
 
-    public static function getPrimaryKey()
+    public static function idColumn()
     {
         $currentClass = get_called_class();
         return $currentClass::$primaryKey;
     }
 
+    public function id()
+    {
+        return isset($this->{self::idColumn()}) ? $this->{self::idColumn()} : null;
+    }
+
     public function getColumnNames()
     {
-        $sql = 'select column_name from information_schema.columns where table_name="'.self::getTableName().'"';
+        // Works ONLY for MySQL
+        $sql = 'select column_name from information_schema.columns where table_name="'.self::table().'"';
         $stmt = self::$conn->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -49,33 +55,11 @@ abstract class DbModel
 
     public function save()
     {
-        $array = $this->toArray();
-        unset($array[self::getPrimaryKey()]);
-
         if ($this->isNew()) {
-            $columns = [];
-            $bindings = [];
-            $values = [];
-            foreach ($array as $column => $value) {
-                $columns[] = sprintf('`%s`', $column);
-                $bindings[] = "?";
-                $values[] = $value;
-            }
-            $sql = sprintf("INSERT INTO `%s` (%s) VALUES (%s)", self::getTableName(), join(', ', $columns), join(', ', $bindings));
-            self::$conn->prepare($sql)->execute($values);
-            $this->{self::getPrimaryKey()} = self::$conn->lastInsertId();
+            $this->_insertQuery();
         }
         else {
-            $updates = [];
-            $values = [];
-            foreach ($array as $column => $value) {
-                $updates[] = sprintf('`%s` = ?', $column);
-                $values[] = $value;
-            }
-            $values[] = $this->id();
-
-            $sql = sprintf("UPDATE `%s` SET %s WHERE `%s` = ?", self::getTableName(), join(', ', $updates), self::getPrimaryKey());
-            self::$conn->prepare($sql)->execute($values);
+            $this->_updateQuery();
         }
     }
 
@@ -84,14 +68,40 @@ abstract class DbModel
         return empty($this->id());
     }
 
-    public function id()
+   protected function _insertQuery()
     {
-        return $this->{self::getPrimaryKey()};
+        $attributes = $this->toArray();
+        unset($attributes[self::idColumn()]);
+
+        $columns = [];
+        $bindings = [];
+        $values = [];
+        foreach ($attributes as $column => $value) {
+            $columns[] = sprintf('`%s`', $column);
+            $bindings[] = "?";
+            $values[] = $value;
+        }
+
+        $sql = sprintf("INSERT INTO `%s` (%s) VALUES (%s)", self::table(), join(', ', $columns), join(', ', $bindings));
+        self::$conn->prepare($sql)->execute($values);
+        $this->{self::idColumn()} = self::$conn->lastInsertId();
     }
 
-    public function __get($attribute)
+    protected function _updateQuery()
     {
-        return null;
+        $attributes = $this->toArray();
+        unset($attributes[self::idColumn()]);
+
+        $updates = [];
+        $values = [];
+        foreach ($attributes as $column => $value) {
+            $updates[] = sprintf('`%s` = ?', $column);
+            $values[] = $value;
+        }
+        $values[] = $this->id();
+
+        $sql = sprintf("UPDATE `%s` SET %s WHERE `%s` = ?", self::table(), join(', ', $updates), self::idColumn());
+        self::$conn->prepare($sql)->execute($values);
     }
 }
 
