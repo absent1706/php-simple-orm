@@ -156,6 +156,15 @@ abstract class DbModel
         $query = new QueryBuilder(self::$conn, [$slaveTable => '*', $localTable => array()], $slaveClass);
         return $query->where("`$slaveTable`.`$slaveForeignKey` = `$localTable`.`$localKey` AND `$localTable`.`$localKey` = ?", [$this->id()]);
     }
+
+    public function belongsTo($masterClass, $localKey, $masterForeignKey)
+    {
+        // TODO: automatically guess $masterForeignKey and $localKey (guess standard column names)
+        $localTable = self::table();
+        $masterTable = $masterClass::table();
+        $query = new QueryBuilder(self::$conn, [$masterTable => '*', $localTable => array()], $masterClass);
+        return $query->where("`$masterTable`.`$masterForeignKey` = `$localTable`.`$localKey` AND `$localTable`.`$localKey` = ?", [$this->{$localKey}]);
+    }
 }
 
 class QueryBuilder
@@ -188,9 +197,13 @@ class QueryBuilder
         return $statement->fetchAll(PDO::FETCH_CLASS, $this->resultClass);
     }
 
+    /* TODO: find method whic simply searches by id */
+    /* TODO: findOrFail method */
+
     public function first()
     {
-        return $this->limit(1)->all()[0];
+        $results = $this->limit(1)->all();
+        return $results ? $results[0] : null;
     }
 
     public function limit($limit)
@@ -199,6 +212,7 @@ class QueryBuilder
         return $this;
     }
 
+    /* TODO: allow multiple WHERE's */
     public function where($condition, $bindings)
     {
         $this->query .= " WHERE $condition";
@@ -217,6 +231,11 @@ class QueryBuilder
 class Post extends DbModel
 {
     protected static $table = 'posts';
+
+    public function user()
+    {
+        return $this->belongsTo('User', 'user_id', 'id');
+    }
 }
 
 class User extends DbModel
@@ -249,8 +268,8 @@ $conn->exec("
         `title` TEXT NULL,
         `body` TEXT NULL,
         PRIMARY KEY (`id`),
-        INDEX `FK_posts_posts` (`user_id`),
-        CONSTRAINT `FK_posts_posts` FOREIGN KEY (`user_id`) REFERENCES `posts` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+        INDEX `FK_users_posts` (`user_id`),
+        CONSTRAINT `FK_posts_posts` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
     );
 ");
 
@@ -280,9 +299,9 @@ $p3 = new Post(['user_id' => $user2->id(), 'title' => 'title 3', 'body' => 'body
 $p3->save();
 echo "Inserted post with id ".$p3->id()."\n";
 
-$p3 = Post::query()->where('id = ?', [3])->first();
+$p3 = Post::query()->first();
 $p3->delete();
-echo "Deleted post with id 3\n";
+echo "Deleted post with id ".$p3->id()."\n";
 
 var_dump(Post::query()->where('id < ?', [3])->order_by('id DESC')->all());
 var_dump(Post::query()->first()->toArray());
@@ -299,3 +318,8 @@ var_dump($user1->posts()->all());
 echo "Posts of user #".$user2->id()." :\n";
 var_dump($user2->posts()->all());
 
+echo "Author of post #".$post11->id()." :\n";
+var_dump($post11->user()->first());
+
+echo "Author of post #".$post21->id()." :\n";
+var_dump($post21->user()->first());
