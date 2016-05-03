@@ -8,8 +8,10 @@ abstract class DbModel
 
     public static function setConnection(PDO $conn)
     {
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         self::$conn = $conn;
     }
+
 
     public function __construct(array $attributes = [])
     {
@@ -19,6 +21,11 @@ abstract class DbModel
     public static function query($value='')
     {
         return new QueryBuilder(self::$conn, self::table(), static::class);
+    }
+
+    public static function dbName()
+    {
+        return self::$conn->query('select database()')->fetchColumn();
     }
 
     public static function table()
@@ -41,7 +48,7 @@ abstract class DbModel
     public function getColumnNames()
     {
         // Works ONLY for MySQL
-        $sql = 'select column_name from information_schema.columns where table_name="'.self::table().'"';
+        $sql = 'select column_name from information_schema.columns where table_schema="'.self::dbName().'" and table_name="'.self::table().'"';
         $stmt = self::$conn->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -90,6 +97,7 @@ abstract class DbModel
 
     public function save()
     {
+        // TODO: automatically update timestamps
         if ($this->isNew()) {
             $this->_insertQuery();
         }
@@ -190,50 +198,72 @@ class Post extends DbModel
     protected static $table = 'posts';
 }
 
-$connection_string = "mysql:host=localhost;dbname=test";
+class User extends DbModel
+{
+    protected static $table = 'users';
+}
+
+$connection_string = "mysql:host=localhost;dbname=test_db";
 $user = 'root';
 $password = '';
 
 $conn = new PDO($connection_string, $user, $password);
 $conn->exec("
-    DROP TABLE IF EXISTS posts;
-    CREATE TABLE `posts` (
-        `id` INT(11) NOT NULL AUTO_INCREMENT,
-        `title` TEXT NULL,
-        `body` TEXT NULL,
+    DROP TABLE IF EXISTS `users`;
+    CREATE TABLE `users` (
+        `id` INT NOT NULL AUTO_INCREMENT,
+        `name` VARCHAR(255) NOT NULL,
         PRIMARY KEY (`id`)
     );
 
-    INSERT INTO posts (id, title, body) VALUES (1, 'post 1', 'body 1');
-    INSERT INTO posts (id, title, body) VALUES (2, 'post 2', 'body 2');
-    INSERT INTO posts (id, title, body) VALUES (3, 'post 3', 'body 3');
-    INSERT INTO posts (id, title, body) VALUES (4, 'post 4', 'body 4');
+    DROP TABLE IF EXISTS `posts`;
+    CREATE TABLE `posts` (
+        `id` INT(11) NOT NULL AUTO_INCREMENT,
+        `user_id` INT(11) NULL DEFAULT NULL,
+        `title` TEXT NULL,
+        `body` TEXT NULL,
+        PRIMARY KEY (`id`),
+        INDEX `FK_posts_posts` (`user_id`),
+        CONSTRAINT `FK_posts_posts` FOREIGN KEY (`user_id`) REFERENCES `posts` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+    );
 ");
 
 DbModel::setConnection($conn);
+
+$user1 = User::create(['name' => 'Peter']);
+$user2 = User::create(['name' => 'Bob']);
+
+/* general stuff demo */
+
+$p = new Post;
+$p->title = 'title 1';
+$p->body = 'body 1';
+$p->user_id = $user1->id();
+$p->save();
+echo "Inserted post with id ".$p->id()."\n";
+
+$p1 = Post::query()->first();
+$p1->title = 'Changed title 1';
+$p1->save();
+echo "Updated post ".$p1->id()."\n";
+
+$p2 = Post::create(['user_id' => $user1->id(), 'title' => 'title 2', 'body' => 'body 2']);
+$p2->update(['title' => 'title 2 - updated']);
+
+$p3 = new Post(['user_id' => $user2->id(), 'title' => 'title 3', 'body' => 'body 3']);
+$p3->save();
+echo "Inserted post with id ".$p3->id()."\n";
+
+$p3 = Post::query()->where('id = ?', [3])->first();
+$p3->delete();
+echo "Deleted post with id 3\n";
 
 var_dump(Post::getColumnNames());
 var_dump(Post::query()->where('id < ?', [3])->order_by('id DESC')->all());
 var_dump(Post::query()->first()->toArray());
 
-$p = new Post;
-$p->title = 'new title';
-$p->body = 'new body';
-$p->save();
-echo "Inserted post with id ".$p->id()."\n";
-
-$p2 = Post::query()->first();
-$p2->title = 'Changed title 1';
-$p2->save();
-echo "Updated post ".$p2->id();
-
-$p3 = Post::create(['title' => 'title 5', 'body' => 'body 5']);
-$p3->update(['title' => 'title 5 - updated']);
-
-$p4 = new Post(['title' => 'title 6', 'body' => 'body 6']);
-$p4->save();
-echo "Inserted post with id ".$p4->id()."\n";
-
-$p3_d = Post::query()->where('id = ?', [3])->first();
-$p3_d->delete();
-echo "Deleted post with id 3\n";
+/* relations demo */
+$post11 = Post::create(['user_id' => $user1->id(), 'title' => 'title 11', 'body' => 'body 11']);
+$post12 = Post::create(['user_id' => $user1->id(), 'title' => 'title 12', 'body' => 'body 21']);
+$post21 = Post::create(['user_id' => $user2->id(), 'title' => 'title 21', 'body' => 'body 21']);
+$post22 = Post::create(['user_id' => $user2->id(), 'title' => 'title 22', 'body' => 'body 22']);
