@@ -21,6 +21,8 @@ abstract class DbModel
 
 class QueryBuilder
 {
+    protected $conn, $query, $bindings;
+
     public function __construct($conn, $table, $resultClass = null)
     {
         $this->conn = $conn;
@@ -30,8 +32,9 @@ class QueryBuilder
 
     public function all()
     {
-        // die($this->query);
-        return $this->conn->query($this->query)->fetchAll(PDO::FETCH_CLASS, $this->resultClass);
+        $statement = $this->conn->prepare($this->query);
+        $statement->execute($this->bindings);
+        return $statement->fetchAll(PDO::FETCH_CLASS, $this->resultClass);
     }
 
     public function first()
@@ -45,9 +48,10 @@ class QueryBuilder
         return $this;
     }
 
-    public function where($condition)
+    public function where($condition, $bindings)
     {
         $this->query .= " WHERE $condition";
+        $this->bindings = $bindings;
         return $this;
     }
 
@@ -80,5 +84,5 @@ $conn->exec("
 ");
 
 DbModel::setConnection($conn);
-var_dump(Post::query()->where('id < 3')->order_by('id DESC')->all());
+var_dump(Post::query()->where('id < ?', [3])->order_by('id DESC')->all());
 var_dump(Post::query()->first());
