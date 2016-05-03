@@ -30,18 +30,31 @@ class QueryBuilder
 
     public function all()
     {
+        // die($this->query);
         return $this->conn->query($this->query)->fetchAll(PDO::FETCH_CLASS, $this->resultClass);
     }
 
     public function first()
     {
-        $this->limit(1);
-        return $this->all()[0];
+        return $this->limit(1)->all()[0];
     }
 
     public function limit($limit)
     {
-        $this->query .= " limit 1";
+        $this->query .= " LIMIT 1";
+        return $this;
+    }
+
+    public function where($condition)
+    {
+        $this->query .= " WHERE $condition";
+        return $this;
+    }
+
+    public function order_by($order)
+    {
+        $this->query .= " ORDER BY $order";
+        return $this;
     }
 }
 
@@ -67,5 +80,5 @@ $conn->exec("
 ");
 
 DbModel::setConnection($conn);
-var_dump(Post::query()->all());
+var_dump(Post::query()->where('id < 3')->order_by('id DESC')->all());
 var_dump(Post::query()->first());
