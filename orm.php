@@ -53,6 +53,29 @@ abstract class DbModel
         return $result;
     }
 
+    public static function create($attributes)
+    {
+        $currentClass = get_called_class();
+        $new_object = new $currentClass;
+        $new_object->fill($attributes)->save();
+        return $new_object;
+    }
+
+    public function update($attributes)
+    {
+        $this->fill($attributes)->save();
+        return $this;
+    }
+
+    // TODO: custom setters/getters
+    public function fill($attributes)
+    {
+        foreach ($attributes as $attribute => $value) {
+            $this->$attribute = $value;
+        }
+        return $this;
+    }
+
     public function save()
     {
         if ($this->isNew()) {
@@ -61,6 +84,7 @@ abstract class DbModel
         else {
             $this->_updateQuery();
         }
+        return $this;
     }
 
     public function isNew()
@@ -68,7 +92,7 @@ abstract class DbModel
         return empty($this->id());
     }
 
-   protected function _insertQuery()
+    protected function _insertQuery()
     {
         $attributes = $this->toArray();
         unset($attributes[self::idColumn()]);
@@ -181,8 +205,8 @@ var_dump(Post::query()->where('id < ?', [3])->order_by('id DESC')->all());
 var_dump(Post::query()->first()->toArray());
 
 $p = new Post;
-$p->title='new title';
-$p->body='new body';
+$p->title = 'new title';
+$p->body = 'new body';
 $p->save();
 echo "Inserted post with id ".$p->id()."\n";
 
@@ -190,3 +214,6 @@ $p2 = Post::query()->first();
 $p2->title = 'Changed title 1';
 $p2->save();
 echo "Updated post ".$p2->id();
+
+$p3 = Post::create(['title' => 'title 5', 'body' => 'body 5']);
+$p3->update(['title' => 'title 5 - updated']);
