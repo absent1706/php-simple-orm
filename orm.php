@@ -20,7 +20,7 @@ abstract class DbModel
 
     public static function query($value='')
     {
-        return new QueryBuilder(self::$conn, self::table(), static::class);
+        return new QueryBuilder(self::$conn, [self::table() => '*'], static::class);
     }
 
     public static function dbName()
@@ -147,16 +147,37 @@ abstract class DbModel
         $sql = sprintf("UPDATE `%s` SET %s WHERE `%s` = ?", self::table(), join(', ', $updates), self::idColumn());
         self::$conn->prepare($sql)->execute($values);
     }
+
+    public function hasMany($slaveClass, $slaveForeignKey, $localKey)
+    {
+        // TODO: automatically guess $slaveForeignKey and $localKey (guess standard column names)
+        $localTable = self::table();
+        $slaveTable = $slaveClass::table();
+        $query = new QueryBuilder(self::$conn, [$slaveTable => '*', $localTable => array()], $slaveClass);
+        return $query->where("`$slaveTable`.`$slaveForeignKey` = `$localTable`.`$localKey` AND `$localTable`.`$localKey` = ?", [$this->id()]);
+    }
 }
 
 class QueryBuilder
 {
     protected $conn, $query, $bindings;
 
-    public function __construct($conn, $table, $resultClass = null)
+    public function __construct($conn, $columnsToSelect, $resultClass = null)
     {
         $this->conn = $conn;
-        $this->query = "select * from $table";
+
+        $_columns = [];
+        foreach ($columnsToSelect as $table => $columns) {
+            if ($columns == '*') {
+                $_columns[] = "`$table`.*";
+            }
+            else {
+                foreach ($columns as $column) {
+                    $_columns[] = "`$table`.`$column`";
+                }
+            }
+        }
+        $this->query = "select " . join(',',$_columns) . " from ".join(',',array_keys($columnsToSelect));
         $this->resultClass = empty($resultClass) ? 'stdClass' : $resultClass;
     }
 
@@ -201,6 +222,11 @@ class Post extends DbModel
 class User extends DbModel
 {
     protected static $table = 'users';
+
+    public function posts()
+    {
+        return $this->hasMany('Post', 'user_id', 'id');
+    }
 }
 
 $connection_string = "mysql:host=localhost;dbname=test_db";
@@ -258,7 +284,6 @@ $p3 = Post::query()->where('id = ?', [3])->first();
 $p3->delete();
 echo "Deleted post with id 3\n";
 
-var_dump(Post::getColumnNames());
 var_dump(Post::query()->where('id < ?', [3])->order_by('id DESC')->all());
 var_dump(Post::query()->first()->toArray());
 
@@ -267,3 +292,10 @@ $post11 = Post::create(['user_id' => $user1->id(), 'title' => 'title 11', 'body'
 $post12 = Post::create(['user_id' => $user1->id(), 'title' => 'title 12', 'body' => 'body 21']);
 $post21 = Post::create(['user_id' => $user2->id(), 'title' => 'title 21', 'body' => 'body 21']);
 $post22 = Post::create(['user_id' => $user2->id(), 'title' => 'title 22', 'body' => 'body 22']);
+
+echo "Posts of user #".$user1->id()." :\n";
+var_dump($user1->posts()->all());
+
+echo "Posts of user #".$user2->id()." :\n";
+var_dump($user2->posts()->all());
+
